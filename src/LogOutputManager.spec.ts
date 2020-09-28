@@ -58,7 +58,7 @@ describe('LogOutputManager ', () => {
 
     it('tests onDidStartDebugSession clear flag', () => {
         collectionMock.expects('clear').once();
-        logOutputManager.isClearingOutputOnLaunch = true;
+        logOutputManager.isClearingConsoleOnChannelStart = true;
         logOutputManager.onDidStartDebugSession();
         outputChannelMock.verify();
         collectionMock.verify();
@@ -67,8 +67,26 @@ describe('LogOutputManager ', () => {
 
     it('tests onDidStartDebugSession no clear flag', () => {
         collectionMock.expects('clear').never();
-        logOutputManager.isClearingOutputOnLaunch = false;
+        logOutputManager.isClearingConsoleOnChannelStart = false;
         logOutputManager.onDidStartDebugSession();
+        outputChannelMock.verify();
+        collectionMock.verify();
+        logOutputManagerMock.verify();
+    });
+
+    it('tests onDidReceiveDebugSessionCustomEvent - BSLaunchStartEvent - clear flag', () => {
+        collectionMock.expects('clear').once();
+        logOutputManager.isClearingOutputOnLaunch = true;
+        logOutputManager.onDidReceiveDebugSessionCustomEvent({ event: 'BSLaunchStartEvent' });
+        outputChannelMock.verify();
+        collectionMock.verify();
+        logOutputManagerMock.verify();
+    });
+
+    it('tests onDidReceiveDebugSessionCustomEvent - BSLaunchStartEvent - no clear flag', () => {
+        collectionMock.expects('clear').never();
+        logOutputManager.isClearingOutputOnLaunch = false;
+        logOutputManager.onDidReceiveDebugSessionCustomEvent({ event: 'BSLaunchStartEvent' });
         outputChannelMock.verify();
         collectionMock.verify();
         logOutputManagerMock.verify();
@@ -83,7 +101,6 @@ describe('LogOutputManager ', () => {
     });
 
     it('tests onDidReceiveDebugSessionCustomEvent - error - empty', () => {
-        collectionMock.expects('clear').once();
         logOutputManager.onDidReceiveDebugSessionCustomEvent({ event: '', body: [] });
         outputChannelMock.verify();
         collectionMock.verify();
@@ -91,7 +108,6 @@ describe('LogOutputManager ', () => {
     });
 
     it('tests onDidReceiveDebugSessionCustomEvent - error - undefined', () => {
-        collectionMock.expects('clear').once();
         logOutputManager.onDidReceiveDebugSessionCustomEvent({ event: '' });
         outputChannelMock.verify();
         collectionMock.verify();
@@ -99,7 +115,6 @@ describe('LogOutputManager ', () => {
     });
 
     it('tests onDidReceiveDebugSessionCustomEvent - errors', () => {
-        collectionMock.expects('clear').once();
         logOutputManagerMock.expects('addDiagnosticForError').once();
         let compileErrors = [{ path: 'path1', message: 'message1' }];
         logOutputManager.onDidReceiveDebugSessionCustomEvent({ event: '', body: compileErrors });
@@ -124,11 +139,11 @@ describe('LogOutputManager ', () => {
 
         it('tests output indexes are cleared', () => {
             logOutputManagerMock.expects('appendLine')
-            .withArgs('---------------------- MARK 0 ----------------------').once();
+                .withArgs('---------------------- MARK 0 ----------------------').once();
             logOutputManagerMock.expects('appendLine')
-            .withArgs('---------------------- MARK 1 ----------------------').once();
+                .withArgs('---------------------- MARK 1 ----------------------').once();
             logOutputManagerMock.expects('appendLine')
-            .withArgs('---------------------- MARK 2 ----------------------').once();
+                .withArgs('---------------------- MARK 2 ----------------------').once();
             logOutputManager.markOutput();
             logOutputManager.markOutput();
             logOutputManager.markOutput();
@@ -139,9 +154,9 @@ describe('LogOutputManager ', () => {
             logOutputManagerMock = sinon.mock(logOutputManager);
             logOutputManager.clearOutput();
             logOutputManagerMock.expects('appendLine')
-            .withArgs('---------------------- MARK 0 ----------------------').once();
+                .withArgs('---------------------- MARK 0 ----------------------').once();
             logOutputManagerMock.expects('appendLine')
-            .withArgs('---------------------- MARK 1 ----------------------').once();
+                .withArgs('---------------------- MARK 1 ----------------------').once();
 
             logOutputManager.markOutput();
             logOutputManager.markOutput();
@@ -155,7 +170,7 @@ describe('LogOutputManager ', () => {
     describe('tests appendLine', () => {
         it('tests mustInclude lines are added', () => {
             outputChannelMock.expects('appendLine')
-              .withExactArgs('test1').once();
+                .withExactArgs('test1').once();
             logOutputManager.appendLine('test1', true);
             outputChannelMock.verify();
             collectionMock.verify();
@@ -163,9 +178,9 @@ describe('LogOutputManager ', () => {
 
         it('splits multiple lines', () => {
             outputChannelMock.expects('appendLine')
-              .withExactArgs('test1').once();
+                .withExactArgs('test1').once();
             outputChannelMock.expects('appendLine')
-              .withExactArgs('test2').once();
+                .withExactArgs('test2').once();
 
             logOutputManager.appendLine('test1\ntest2', true);
 
@@ -177,11 +192,11 @@ describe('LogOutputManager ', () => {
     describe('tests markOutput', () => {
         it('tests outputs are added incrementally', () => {
             logOutputManagerMock.expects('appendLine')
-              .withArgs('---------------------- MARK 0 ----------------------').once();
+                .withArgs('---------------------- MARK 0 ----------------------').once();
             logOutputManagerMock.expects('appendLine')
-              .withArgs('---------------------- MARK 1 ----------------------').once();
+                .withArgs('---------------------- MARK 1 ----------------------').once();
             logOutputManagerMock.expects('appendLine')
-              .withArgs('---------------------- MARK 2 ----------------------').once();
+                .withArgs('---------------------- MARK 2 ----------------------').once();
             logOutputManager.markOutput();
             logOutputManager.markOutput();
             logOutputManager.markOutput();
@@ -218,16 +233,16 @@ describe('LogOutputManager ', () => {
     describe('tests getFilename', () => {
         describe('mustInclude items', () => {
             let params = [
-              { text: 'pkg:/file.xml', expected: 'file' },
-              { text: 'pkg:/path/file.xml', expected: 'file' },
-              { text: 'pkg:/path/path2/file.xml', expected: 'file' },
-              { text: 'pkg:/file.brs', expected: 'file' },
-              { text: 'pkg:/path/file.brs', expected: 'file' },
-              { text: 'pkg:/path/path2/file.brs', expected: 'file' },
-              { text: 'path/file.brs', expected: 'file' },
-              { text: 'path/path2/file.brs', expected: 'file' },
-              { text: 'file.brs', expected: 'file' },
-              { text: 'pkg:/file.other', expected: 'file.other' },
+                { text: 'pkg:/file.xml', expected: 'file' },
+                { text: 'pkg:/path/file.xml', expected: 'file' },
+                { text: 'pkg:/path/path2/file.xml', expected: 'file' },
+                { text: 'pkg:/file.brs', expected: 'file' },
+                { text: 'pkg:/path/file.brs', expected: 'file' },
+                { text: 'pkg:/path/path2/file.brs', expected: 'file' },
+                { text: 'path/file.brs', expected: 'file' },
+                { text: 'path/path2/file.brs', expected: 'file' },
+                { text: 'file.brs', expected: 'file' },
+                { text: 'pkg:/file.other', expected: 'file.other' },
             ];
             itParam('lf ${value.text} if {$value.expected}', params, (param) => {
                 assert.equal(logOutputManager.getFilename(param.text), param.expected);
@@ -239,51 +254,51 @@ describe('LogOutputManager ', () => {
         it('tests Full', () => {
             logOutputManager.hyperlinkFormat = 'Full';
             let logText = logOutputManager.getCustomLogText('pkg:/path/file.brs', 'file',
-            '.brs', 20, 2);
+                '.brs', 20, 2, false);
             assert.equal(logText, 'pkg:/path/file.brs(20)');
         });
 
         it('tests Short', () => {
             logOutputManager.hyperlinkFormat = 'Short';
             let logText = logOutputManager.getCustomLogText('pkg:/path/file.brs', 'file',
-            '.brs', 20, 2);
+                '.brs', 20, 2, false);
             assert.equal(logText, '#2');
         });
 
         it('tests Hidden', () => {
             logOutputManager.hyperlinkFormat = 'Hidden';
             let logText = logOutputManager.getCustomLogText('pkg:/path/file.brs', 'file',
-              '.brs', 20, 2);
+                '.brs', 20, 2, false);
             assert.equal(logText, ' ');
         });
 
         describe('tests Filename', () => {
             let params = [
-          { configSetting: 'Filename', text: 'pkg:/file.brs(20)' },
-          { configSetting: 'Filename', text: 'pkg:/path/file.brs(20)' },
-          { configSetting: 'Filename', text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: 'Filename', text: 'pkg:/file.brs(20)' },
+                { configSetting: 'Filename', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: 'Filename', text: 'pkg:/path/path2/file.brs(20)' },
             ];
             itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
                 logOutputManager.hyperlinkFormat = param.configSetting;
                 declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
                 logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
                 let logText = logOutputManager.getCustomLogText(param.text, 'file',
-                  '.brs', 20, 2);
+                    '.brs', 20, 2, false);
                 assert.equal(logText, 'file.brs(20)');
             });
         });
 
         describe('tests Filename with addline to log', () => {
             let params = [
-              { configSetting: 'Filename', text: 'pkg:/file.brs(20)' },
-              { configSetting: 'Filename', text: 'pkg:/path/file.brs(20)' },
-              { configSetting: 'Filename', text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: 'Filename', text: 'pkg:/file.brs(20)' },
+                { configSetting: 'Filename', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: 'Filename', text: 'pkg:/path/path2/file.brs(20)' },
             ];
             itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
                 logOutputManager.hyperlinkFormat = param.configSetting;
                 declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
                 logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
-                logDocumentLinkProviderMock.expects('addCustomLink');
+                logDocumentLinkProviderMock.expects('addCustomPkgLink');
                 const logLine = new LogLine(param.text + ' sometext', true);
                 logOutputManager.addLogLineToOutput(logLine);
                 // assert.equal(logText, 'file.methodName(20)');
@@ -291,43 +306,143 @@ describe('LogOutputManager ', () => {
         });
         describe('tests FilenameAndFunction', () => {
             let params = [
-          { configSetting: null, text: 'pkg:/file.brs(20)' },
-          { configSetting: null, text: 'pkg:/path/file.brs(20)' },
-          { configSetting: null, text: 'pkg:/path/path2/file.brs(20)' },
-          { configSetting: '', text: 'pkg:/file.brs(20)' },
-          { configSetting: '', text: 'pkg:/path/file.brs(20)' },
-          { configSetting: '', text: 'pkg:/path/path2/file.brs(20)' },
-          { configSetting: 'FilenameAndFunction', text: 'pkg:/file.brs(20)' },
-          { configSetting: 'FilenameAndFunction', text: 'pkg:/path/file.brs(20)' },
-          { configSetting: 'FilenameAndFunction', text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/path/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/path/path2/file.brs(20)' },
             ];
             itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
                 logOutputManager.hyperlinkFormat = param.configSetting;
                 declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
                 logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
                 let logText = logOutputManager.getCustomLogText(param.text, 'file',
-                  '.brs', 20, 2);
+                    '.brs', 20, 2, false);
                 assert.equal(logText, 'file.methodName(20)');
             });
         });
 
         describe('tests FilenameAndFunction with addline to log', () => {
             let params = [
-              { configSetting: null, text: 'pkg:/file.brs(20)' },
-              { configSetting: null, text: 'pkg:/path/file.brs(20)' },
-              { configSetting: null, text: 'pkg:/path/path2/file.brs(20)' },
-              { configSetting: '', text: 'pkg:/file.brs(20)' },
-              { configSetting: '', text: 'pkg:/path/file.brs(20)' },
-              { configSetting: '', text: 'pkg:/path/path2/file.brs(20)' },
-              { configSetting: 'FilenameAndFunction', text: 'pkg:/file.brs(20)' },
-              { configSetting: 'FilenameAndFunction', text: 'pkg:/path/file.brs(20)' },
-              { configSetting: 'FilenameAndFunction', text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/path/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/path/path2/file.brs(20)' },
             ];
             itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
                 logOutputManager.hyperlinkFormat = param.configSetting;
                 declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
                 logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
-                logDocumentLinkProviderMock.expects('addCustomLink');
+                logDocumentLinkProviderMock.expects('addCustomPkgLink');
+                const logLine = new LogLine(param.text + ' sometext', true);
+                logOutputManager.addLogLineToOutput(logLine);
+                // assert.equal(logText, 'file.methodName(20)');
+            });
+        });
+    });
+
+    describe('tests getCustomLogText file prefix', () => {
+        it('tests Full', () => {
+            logOutputManager.hyperlinkFormat = 'Full';
+            let logText = logOutputManager.getCustomLogText('file:///path/file.brs', 'file',
+                '.brs', 20, 2, true);
+            assert.equal(logText, 'file:///path/file.brs(20)');
+        });
+
+        it('tests Short', () => {
+            logOutputManager.hyperlinkFormat = 'Short';
+            let logText = logOutputManager.getCustomLogText('file:///path/file.brs', 'file',
+                '.brs', 20, 2, true);
+            assert.equal(logText, '#2');
+        });
+
+        it('tests Hidden', () => {
+            logOutputManager.hyperlinkFormat = 'Hidden';
+            let logText = logOutputManager.getCustomLogText('file:///path/file.brs', 'file',
+                '.brs', 20, 2, true);
+            assert.equal(logText, ' ');
+        });
+
+        describe('tests Filename', () => {
+            let params = [
+                { configSetting: 'Filename', text: 'file:///file.brs(20)' },
+                { configSetting: 'Filename', text: 'file:///path/file.brs(20)' },
+                { configSetting: 'Filename', text: 'file:///path/path2/file.brs(20)' },
+            ];
+            itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
+                logOutputManager.hyperlinkFormat = param.configSetting;
+                declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
+                logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
+                let logText = logOutputManager.getCustomLogText(param.text, 'file',
+                    '.brs', 20, 2, true);
+                assert.equal(logText, 'file.brs(20)');
+            });
+        });
+
+        describe('tests Filename with addline to log', () => {
+            let params = [
+                { configSetting: 'Filename', text: 'file:///file.brs(20)' },
+                { configSetting: 'Filename', text: 'file:///path/file.brs(20)' },
+                { configSetting: 'Filename', text: 'file:///path/path2/file.brs(20)' },
+            ];
+            itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
+                logOutputManager.hyperlinkFormat = param.configSetting;
+                declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
+                logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
+                logDocumentLinkProviderMock.expects('addCustomFileLink');
+                const logLine = new LogLine(param.text + ' sometext', true);
+                logOutputManager.addLogLineToOutput(logLine);
+                // assert.equal(logText, 'file.methodName(20)');
+            });
+        });
+        describe('tests FilenameAndFunction', () => {
+            let params = [
+                { configSetting: null, text: 'file:///file.brs(20)' },
+                { configSetting: null, text: 'file:///path/file.brs(20)' },
+                { configSetting: null, text: 'file:///path/path2/file.brs(20)' },
+                { configSetting: '', text: 'file:///file.brs(20)' },
+                { configSetting: '', text: 'file:///path/file.brs(20)' },
+                { configSetting: '', text: 'file:///path/path2/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'file:///file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'file:///path/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'file:///path/path2/file.brs(20)' },
+            ];
+            itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
+                logOutputManager.hyperlinkFormat = param.configSetting;
+                declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
+                logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
+                let logText = logOutputManager.getCustomLogText(param.text, 'file',
+                    '.brs', 20, 2, true);
+                assert.equal(logText, 'file.methodName(20)');
+            });
+        });
+
+        describe('tests FilenameAndFunction with addline to log', () => {
+            let params = [
+                { configSetting: null, text: 'pkg:/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/path/file.brs(20)' },
+                { configSetting: null, text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: '', text: 'pkg:/path/path2/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/path/file.brs(20)' },
+                { configSetting: 'FilenameAndFunction', text: 'pkg:/path/path2/file.brs(20)' },
+            ];
+            itParam('lf ${value.configSetting} if {$value.text} ', params, (param) => {
+                logOutputManager.hyperlinkFormat = param.configSetting;
+                declarationProviderMock.expects('getFunctionBeforeLine').returns({ name: 'methodName' });
+                logDocumentLinkProviderMock.expects('convertPkgPathToFsPath').returns({ name: 'filesystem/file.brs' });
+                logDocumentLinkProviderMock.expects('addCustomPkgLink');
                 const logLine = new LogLine(param.text + ' sometext', true);
                 logOutputManager.addLogLineToOutput(logLine);
                 // assert.equal(logText, 'file.methodName(20)');
@@ -348,63 +463,63 @@ describe('LogOutputManager ', () => {
                 { text: 'test1', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: true },
             ];
             itParam('lf ${value.levelFilter} if {$value.levelFilter} ' +
-              'ef ${value.excludeFilter}', mustIncludeParams, (params) => {
-                  const logLine = new LogLine(params.text, true);
-                  logOutputManager.setIncludeFilter(params.includeFilter);
-                  logOutputManager.setExcludeFilter(params.excludeFilter);
-                  logOutputManager.setLevelFilter(params.levelFilter);
-                  assert.equal(logOutputManager.matchesFilter(logLine), params.expected);
-              });
+                'ef ${value.excludeFilter}', mustIncludeParams, (params) => {
+                    const logLine = new LogLine(params.text, true);
+                    logOutputManager.setIncludeFilter(params.includeFilter);
+                    logOutputManager.setExcludeFilter(params.excludeFilter);
+                    logOutputManager.setLevelFilter(params.levelFilter);
+                    assert.equal(logOutputManager.matchesFilter(logLine), params.expected);
+                });
         });
         describe('non-mustinclude items true scenarios', () => {
             let mustIncludeParams = [
-            { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: null, excludeFilter: null, expected: true },
-            { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: null, excludeFilter: null, expected: true },
-            { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: null, expected: true },
-            { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: null, excludeFilter: 'EXCLUDE', expected: true },
-            { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: null, expected: true },
-            { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: null, excludeFilter: 'EXCLUDE', expected: true },
-            { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: true },
-            { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: null, excludeFilter: null, expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: null, excludeFilter: null, expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: null, expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: null, excludeFilter: 'EXCLUDE', expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: null, expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: null, excludeFilter: 'EXCLUDE', expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: true },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: true },
             ];
             itParam('lf ${value.levelFilter} if {$value.levelFilter} ' +
-            'ef ${value.excludeFilter}', mustIncludeParams, (params) => {
-                const logLine = new LogLine(params.text, false);
-                logOutputManager.setIncludeFilter(params.includeFilter);
-                logOutputManager.setExcludeFilter(params.excludeFilter);
-                logOutputManager.setLevelFilter(params.levelFilter);
-                assert.equal(logOutputManager.matchesFilter(logLine), params.expected);
-            });
+                'ef ${value.excludeFilter}', mustIncludeParams, (params) => {
+                    const logLine = new LogLine(params.text, false);
+                    logOutputManager.setIncludeFilter(params.includeFilter);
+                    logOutputManager.setExcludeFilter(params.excludeFilter);
+                    logOutputManager.setLevelFilter(params.levelFilter);
+                    assert.equal(logOutputManager.matchesFilter(logLine), params.expected);
+                });
         });
         describe('non-must include items false scenarios', () => {
             let mustIncludeParams = [
-          { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: null, excludeFilter: null, expected: false },
-          { text: 'INFO test1 NOTTHERE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
-          { text: 'INFO test1 INCLUDE EXCLUDE', levelFilter: null, includeFilter: null, excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
-          { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
-          { text: 'INFO test1 NOTTHERE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
-          { text: 'INFO test1 INCLUDE EXCLUDE', levelFilter: 'INFO', includeFilter: null, excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: null, excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 INCLUDE EXCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTHERE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTHERE EXCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTHERE EXCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTHERE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
-          { text: 'INFO test1 NOTHERE EXCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: null, excludeFilter: null, expected: false },
+                { text: 'INFO test1 NOTTHERE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
+                { text: 'INFO test1 INCLUDE EXCLUDE', levelFilter: null, includeFilter: null, excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
+                { text: 'INFO test1 NOTTHERE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: null, expected: false },
+                { text: 'INFO test1 INCLUDE EXCLUDE', levelFilter: 'INFO', includeFilter: null, excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: null, excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 INCLUDE EXCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTHERE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTHERE EXCLUDE', levelFilter: null, includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTHERE', levelFilter: 'INFO', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTHERE EXCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 INCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTHERE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
+                { text: 'INFO test1 NOTHERE EXCLUDE', levelFilter: 'DEBUG', includeFilter: 'INCLUDE', excludeFilter: 'EXCLUDE', expected: false },
             ];
             itParam('lf ${value.levelFilter} if {$value.levelFilter} ' +
-          'ef ${value.excludeFilter}', mustIncludeParams, (params) => {
-              const logLine = new LogLine(params.text, false);
-              logOutputManager.setIncludeFilter(params.includeFilter);
-              logOutputManager.setExcludeFilter(params.excludeFilter);
-              logOutputManager.setLevelFilter(params.levelFilter);
-              assert.equal(logOutputManager.matchesFilter(logLine), params.expected);
-          });
+                'ef ${value.excludeFilter}', mustIncludeParams, (params) => {
+                    const logLine = new LogLine(params.text, false);
+                    logOutputManager.setIncludeFilter(params.includeFilter);
+                    logOutputManager.setExcludeFilter(params.excludeFilter);
+                    logOutputManager.setLevelFilter(params.levelFilter);
+                    assert.equal(logOutputManager.matchesFilter(logLine), params.expected);
+                });
         });
     });
 

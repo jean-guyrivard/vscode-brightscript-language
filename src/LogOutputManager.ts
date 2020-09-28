@@ -2,45 +2,50 @@ import * as vscode from 'vscode';
 
 import { DiagnosticCollection } from 'vscode';
 
-import { BrightScriptDebugConfiguration } from './DebugConfigurationProvider';
+import { BrightScriptDebugCompileError } from 'roku-debug';
 import { DeclarationProvider } from './DeclarationProvider';
 import { LogDocumentLinkProvider } from './LogDocumentLinkProvider';
 import { CustomDocumentLink } from './LogDocumentLinkProvider';
-import { BrightScriptDebugCompileError } from './RokuAdapter';
+import * as fsExtra from 'fs-extra';
+import { BrightScriptLaunchConfiguration } from './DebugConfigurationProvider';
 
 export class LogLine {
-    constructor(text, mustInclude) {
-        this.text = text;
-        this.isMustInclude = mustInclude;
+    constructor(
+        public text: string,
+        public isMustInclude: boolean
+    ) {
     }
-    public text: string;
-    public isMustInclude: boolean;
 }
 
 export class LogOutputManager {
-    constructor(outputChannel, context, docLinkProvider,
-                private declarationProvider: DeclarationProvider) {
+
+    constructor(
+        outputChannel,
+        context,
+        docLinkProvider,
+        private declarationProvider: DeclarationProvider
+    ) {
         this.collection = vscode.languages.createDiagnosticCollection('BrightScript');
         this.outputChannel = outputChannel;
         this.docLinkProvider = docLinkProvider;
-        let config: any = vscode.workspace.getConfiguration('brightscript') || {};
-        this.includeStackTraces = (config.output || {}).includeStackTraces;
-        this.isFocusingOutputOnLaunch = (config.output || {}).focusOnLaunch;
-        this.isClearingOutputOnLaunch = (config.output || {}).clearOnLaunch;
-        this.hyperlinkFormat = (config.output || {}).hyperlinkFormat;
+
+        this.loadConfigSettings();
         vscode.workspace.onDidChangeConfiguration((e) => {
-            let config: any = vscode.workspace.getConfiguration('brightscript') || {};
-            this.includeStackTraces = (config.output || {}).includeStackTraces;
-            this.isFocusingOutputOnLaunch = (config.output || {}).focusOnLaunch;
-            this.isClearingOutputOnLaunch = (config.output || {}).clearOnLaunch;
-            this.hyperlinkFormat = (config.output || {}).hyperlinkFormat;
+            this.loadConfigSettings();
         });
+
         this.context = context;
         let subscriptions = context.subscriptions;
         this.includeRegex = null;
         this.logLevelRegex = null;
         this.excludeRegex = null;
-        this.pkgRegex = /(pkg:\/.*\.(?:brs|xml))[ \t]*(?:\((\d+)(?:\:(\d+))?\))?/;
+        /**
+         * we want to catch a few different link formats here:
+         *  - pkg:/path/file.brs(LINE:COL)
+         *  - file://path/file.bs:LINE
+         *  - at line LINE of file pkg:/path/file.brs - this case can arise when the device reports various scenegraph errors such as fields not present, or texture size issues, etc
+         */
+        this.pkgRegex = /(?:\s*at line (\d*) of file )*(?:(pkg:\/|file:\/\/)(.*\.(bs|brs|xml)))[ \t]*(?:(?:(?:\()(\d+)(?:\:(\d+))?\)?)|(?:\:(\d+)?))*/;
         this.debugStartRegex = new RegExp('BrightScript Micro Debugger\.', 'ig');
         this.debugEndRegex = new RegExp('Brightscript Debugger>', 'ig');
 
@@ -94,9 +99,10 @@ export class LogOutputManager {
     private isNextBreakpointSkipped: boolean = false;
     private includeStackTraces: boolean;
     private isInMicroDebugger: boolean;
-    public enableDebuggerAutoRecovery: boolean;
+    public launchConfig: BrightScriptLaunchConfiguration;
     public isFocusingOutputOnLaunch: boolean;
     public isClearingOutputOnLaunch: boolean;
+    public isClearingConsoleOnChannelStart: boolean;
     public hyperlinkFormat: string;
     private collection: DiagnosticCollection;
     private outputChannel: vscode.OutputChannel;
@@ -107,16 +113,30 @@ export class LogOutputManager {
     public onDidStartDebugSession() {
         this.isInMicroDebugger = false;
         this.isNextBreakpointSkipped = false;
-        if (this.isClearingOutputOnLaunch) {
+        if (this.isClearingConsoleOnChannelStart) {
             this.clearOutput();
         }
     }
 
-    public setLaunchConfig(launchConfig: BrightScriptDebugConfiguration) {
-        this.enableDebuggerAutoRecovery = launchConfig.enableDebuggerAutoRecovery;
+    private loadConfigSettings() {
+        let config: any = vscode.workspace.getConfiguration('brightscript') || {};
+        this.includeStackTraces = (config.output || {}).includeStackTraces;
+        this.isFocusingOutputOnLaunch = config?.output?.focusOnLaunch === false ? false : true;
+        this.isClearingOutputOnLaunch = config?.output?.clearOnLaunch === false ? false : true;
+        this.isClearingConsoleOnChannelStart = config?.output?.clearConsoleOnChannelStart === false ? false : true;
+        this.hyperlinkFormat = (config.output || {}).hyperlinkFormat;
+    }
+
+    public setLaunchConfig(launchConfig: BrightScriptLaunchConfiguration) {
+        this.launchConfig = launchConfig;
     }
 
     public onDidReceiveDebugSessionCustomEvent(e: any) {
+        if (e.event === 'BSRendezvousEvent') {
+            // No need to handle rendezvous type events
+            return;
+        }
+
         console.log('received event ' + e.event);
         if (e.event === 'BSLogOutputEvent') {
             this.appendLine(e.body);
@@ -125,12 +145,12 @@ export class LogOutputManager {
             this.isNextBreakpointSkipped = false;
             if (this.isFocusingOutputOnLaunch) {
                 vscode.commands.executeCommand('workbench.action.focusPanel');
+                this.outputChannel.show();
             }
             if (this.isClearingOutputOnLaunch) {
                 this.clearOutput();
             }
         } else {
-            this.clearOutput();
             let errorsByPath = {};
             if (e.body) {
                 e.body.forEach(async (compileError) => {
@@ -212,7 +232,7 @@ export class LogOutputManager {
                             line = null;
                         }
                     } else if (this.isInMicroDebugger) {
-                        if (this.enableDebuggerAutoRecovery && line.startsWith('Break in ')) {
+                        if (this.launchConfig.enableDebuggerAutoRecovery && line.startsWith('Break in ')) {
                             console.log('this block is a break: skipping it');
                             this.isNextBreakpointSkipped = true;
                         }
@@ -226,9 +246,16 @@ export class LogOutputManager {
                 if (this.matchesFilter(logLine)) {
                     this.allLogLines.push(logLine);
                     this.addLogLineToOutput(logLine);
+                    this.writeLogLineToLogfile(logLine.text);
                 }
             }
         });
+    }
+
+    public writeLogLineToLogfile(text: string) {
+        if (this.launchConfig?.logfilePath) {
+            fsExtra.appendFileSync(this.launchConfig.logfilePath, text + '\n');
+        }
     }
 
     public addLogLineToOutput(logLine: LogLine) {
@@ -237,14 +264,22 @@ export class LogOutputManager {
             this.displayedLogLines.push(logLine);
             let match = this.pkgRegex.exec(logLine.text);
             if (match) {
-                const pkgPath = match[1];
-                const lineNumber = Number(match[2]);
-                const filename = this.getFilename(pkgPath);
-                const extension = pkgPath.substring(pkgPath.length - 4);
-                let customText = this.getCustomLogText(pkgPath, filename, extension, Number(lineNumber), logLineNumber);
-                const customLink = new CustomDocumentLink(logLineNumber, match.index, customText.length, pkgPath, lineNumber, filename);
-                console.debug(`adding custom link ${customLink}`);
-                this.docLinkProvider.addCustomLink(customLink);
+                const isFilePath = match[2] === 'file://';
+                const path = isFilePath ? match[3] : 'pkg:/' + match[3];
+                let lineNumber = match[1] ? Number(match[1]) : undefined;
+                if (!lineNumber) {
+                    lineNumber = isFilePath ? Number(match[7]) : Number(match[5]);
+                }
+
+                const filename = this.getFilename(path);
+                const ext = `.${match[4]}`.toLowerCase();
+                let customText = this.getCustomLogText(path, filename, ext, Number(lineNumber), logLineNumber, isFilePath);
+                const customLink = new CustomDocumentLink(logLineNumber, match.index, customText.length, path, lineNumber, filename);
+                if (isFilePath) {
+                    this.docLinkProvider.addCustomFileLink(customLink);
+                } else {
+                    this.docLinkProvider.addCustomPkgLink(customLink);
+                }
                 let logText = logLine.text.substring(0, match.index) + customText + logLine.text.substring(match.index + match[0].length);
                 this.outputChannel.appendLine(logText);
             } else {
@@ -258,11 +293,13 @@ export class LogOutputManager {
         let name = parts.length > 0 ? parts[parts.length - 1] : pkgPath;
         if (name.toLowerCase().endsWith('.xml') || name.toLowerCase().endsWith('.brs')) {
             name = name.substring(0, name.length - 4);
+        } else if (name.toLowerCase().endsWith('.bs')) {
+            name = name.substring(0, name.length - 3);
         }
         return name;
     }
 
-    public getCustomLogText(pkgPath: string, filename: string, extension: string, lineNumber: number, logLineNumber: number): string {
+    public getCustomLogText(pkgPath: string, filename: string, extension: string, lineNumber: number, logLineNumber: number, isFilePath: boolean): string {
         switch (this.hyperlinkFormat) {
             case 'Full':
                 return pkgPath + `(${lineNumber})`;
@@ -277,9 +314,8 @@ export class LogOutputManager {
                 return `${filename}${extension}(${lineNumber})`;
                 break;
             default:
-                const isBrs = extension.toLowerCase() === '.brs';
-                if (isBrs) {
-                    const methodName = this.getMethodName(pkgPath, lineNumber);
+                if (extension === '.brs' || extension === '.bs') {
+                    const methodName = this.getMethodName(pkgPath, lineNumber, isFilePath);
                     if (methodName) {
                         return `${filename}.${methodName}(${lineNumber})`;
                     }
@@ -289,8 +325,8 @@ export class LogOutputManager {
         }
     }
 
-    public getMethodName(pkgPath: string, lineNumber: number): string | null {
-        let fsPath = this.docLinkProvider.convertPkgPathToFsPath(pkgPath);
+    public getMethodName(path: string, lineNumber: number, isFilePath: boolean): string | null {
+        let fsPath = isFilePath ? path : this.docLinkProvider.convertPkgPathToFsPath(path);
         const method = this.declarationProvider.getFunctionBeforeLine(fsPath, lineNumber);
         return method ? method.name : null;
     }
